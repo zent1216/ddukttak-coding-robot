@@ -1,0 +1,1286 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>뚝딱 코딩 로봇</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: classroom workbench — tier map on the home screen; robot floor on the left, block toolbox and program on the right */
+:root {
+  --bg: #e8f1ed;
+  --surface: #ffffff;
+  --surface-2: #f2f7f4;
+  --ink: #1b2a30;
+  --ink-soft: #55676e;
+  --line: #cddad4;
+  --board: #fbfdfc;
+  --cell-line: #dde8e3;
+  --wall: #5a6a72;
+  --gem: #f5a524;
+  --gem-deep: #b86d05;
+  --b-move: #2c69d6;
+  --b-turn: #7646cc;
+  --b-loop: #c9620e;
+  --b-cond: #0b7f70;
+  --b-act: #2e7d32;
+  --b-fn: #a3407a;
+  --b-var: #8a5a00;
+  --on-block: #ffffff;
+  --run: #d93f44;
+  --ok: #18884f;
+  --bad: #c53a35;
+  --robot: #263840;
+  --robot-face: #bfe8ff;
+  --shade: rgba(20, 35, 40, 0.45);
+  --font-display: "Jua", "Gowun Dodum", "Malgun Gothic", sans-serif;
+  --font-body: "Gowun Dodum", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10181b; --surface: #192428; --surface-2: #142024; --ink: #e3eeea; --ink-soft: #9db0ae;
+    --line: #2b3a3f; --board: #152025; --cell-line: #223138; --wall: #3d4f57; --gem: #f7b23d; --gem-deep: #c47c12;
+    --b-move: #3d78e2; --b-turn: #8559d8; --b-loop: #c9620e; --b-cond: #0f8a7a; --b-act: #388e3c; --b-fn: #b44d8a; --b-var: #9a6608;
+    --run: #e2484d; --ok: #3cb877; --bad: #ef6a63; --robot: #d6e5eb; --robot-face: #1d3440; --shade: rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10181b; --surface: #192428; --surface-2: #142024; --ink: #e3eeea; --ink-soft: #9db0ae;
+  --line: #2b3a3f; --board: #152025; --cell-line: #223138; --wall: #3d4f57; --gem: #f7b23d; --gem-deep: #c47c12;
+  --b-move: #3d78e2; --b-turn: #8559d8; --b-loop: #c9620e; --b-cond: #0f8a7a; --b-act: #388e3c; --b-fn: #b44d8a; --b-var: #9a6608;
+  --run: #e2484d; --ok: #3cb877; --bad: #ef6a63; --robot: #d6e5eb; --robot-face: #1d3440; --shade: rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--b-move); outline-offset: 2px; }
+
+.app { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+header.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.brand h1 { font-family: var(--font-display); font-weight: 400; font-size: 2.1rem; line-height: 1.1; margin: 0; text-wrap: balance; }
+.brand p { margin: 4px 0 0; color: var(--ink-soft); }
+.progress { font-family: var(--font-display); font-size: 1.05rem; color: var(--ink-soft); }
+.progress b { color: var(--ink); font-weight: 400; }
+
+/* home: tiers */
+.tiers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 900px) { .tiers { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .tiers { grid-template-columns: minmax(0, 1fr); } }
+.tier {
+  --c: var(--b-move);
+  text-align: left; background: var(--surface); border: 1px solid var(--line); border-top: 8px solid var(--c);
+  border-radius: 18px; padding: 16px 18px 18px; cursor: pointer; display: flex; flex-direction: column; gap: 8px; min-width: 0;
+}
+.tier:hover:not(.locked) { border-color: var(--c); }
+.tier.locked { cursor: not-allowed; opacity: 0.62; }
+.tier .lbl { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.tier .lbl span:first-child { font-family: var(--font-display); font-size: 1.7rem; line-height: 1; }
+.tier .lbl span:last-child { color: var(--ink-soft); font-size: 0.85rem; letter-spacing: 0.04em; }
+.tier h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 1.12rem; }
+.tier p { margin: 0; color: var(--ink-soft); font-size: 0.92rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 0.75rem; padding: 2px 9px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); }
+.bar { height: 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--gem); }
+.tier .meta { display: flex; justify-content: space-between; gap: 8px; font-size: 0.85rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+.badge { font-family: var(--font-display); color: var(--gem-deep); }
+.lockmsg { font-size: 0.85rem; color: var(--ink-soft); }
+.t1 { --c: var(--b-move); } .t2 { --c: var(--b-loop); } .t3 { --c: var(--b-turn); }
+.t4 { --c: var(--b-cond); } .t5 { --c: var(--b-fn); } .t6 { --c: var(--ink); }
+.teacher { display: flex; align-items: center; gap: 8px; color: var(--ink-soft); font-size: 0.9rem; }
+.teacher input { width: 18px; height: 18px; }
+
+/* play */
+.playbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.back { border: 2px solid var(--line); background: var(--surface); border-radius: 12px; padding: 7px 14px; cursor: pointer; font-family: var(--font-display); }
+.tiername { font-family: var(--font-display); font-size: 1.25rem; }
+.levels { display: flex; flex-wrap: wrap; gap: 8px; }
+.lv {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  width: 50px; height: 50px; border-radius: 14px; border: 2px solid var(--line); background: var(--surface);
+  cursor: pointer; font-family: var(--font-display); font-size: 1.1rem; line-height: 1;
+}
+.lv .st { font-size: 0.6rem; letter-spacing: 1px; color: var(--gem-deep); min-height: 0.7rem; }
+.lv.done { border-color: var(--gem); }
+.lv.cur { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.lv.cur .st { color: var(--gem); }
+
+.main { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 880px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.panel h2 { font-family: var(--font-display); font-weight: 400; font-size: 1.15rem; margin: 0; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.muted { color: var(--ink-soft); font-size: 0.88rem; }
+.mission .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.concept { font-size: 0.78rem; letter-spacing: 0.06em; padding: 3px 10px; border-radius: 999px; background: var(--ink); color: var(--bg); }
+.mission h2 { font-size: 1.5rem; }
+.mission .goal { margin: 0; font-size: 1.02rem; }
+.tip { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: 0.93rem; }
+.tip b { font-family: var(--font-display); font-weight: 400; }
+.hint-btn { align-self: flex-start; background: none; border: none; padding: 0; color: var(--b-move); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; font-size: 0.92rem; }
+.hint { margin: 0; font-size: 0.93rem; }
+
+.maptabs { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.maptabs button { border: 2px solid var(--line); background: var(--surface); border-radius: 10px; padding: 4px 12px; cursor: pointer; font-size: 0.9rem; }
+.maptabs button[aria-pressed="true"] { border-color: var(--ink); }
+.maptabs button.pass { color: var(--ok); border-color: var(--ok); }
+.board-wrap { display: flex; justify-content: center; }
+.board { position: relative; display: grid; border-radius: 16px; overflow: hidden; background: var(--board); border: 2px solid var(--line); max-width: 100%; --t: 280ms; }
+.cell { border-right: 1px solid var(--cell-line); border-bottom: 1px solid var(--cell-line); position: relative; display: grid; place-items: center; }
+.cell.wall { background: var(--wall); box-shadow: inset 0 -5px 0 rgba(0,0,0,0.2), inset 0 2px 0 rgba(255,255,255,0.12); }
+.cell.start::after { content: ""; position: absolute; inset: 22%; border-radius: 50%; border: 2px dashed var(--line); }
+.cell > svg { position: absolute; width: 56%; height: 56%; }
+.gem { transition: transform 0.3s, opacity 0.3s; animation: bob 2.4s ease-in-out infinite; }
+.gem.got { transform: scale(0.1) translateY(-40%); opacity: 0; animation: none; }
+@keyframes bob { 50% { transform: translateY(-6%); } }
+.flag { width: 62% !important; height: 62% !important; }
+.robot { position: absolute; transition: left var(--t) ease, top var(--t) ease; pointer-events: none; z-index: 2; }
+.robot .rb-move { width: 100%; height: 100%; }
+.robot svg { width: 100%; height: 100%; display: block; transition: transform calc(var(--t) * 0.9) ease; }
+.robot.instant, .robot.instant svg { transition: none; }
+.rb-move.bump { animation: bump 0.45s ease; }
+@keyframes bump { 35% { transform: translate(var(--bx), var(--by)); } 55% { transform: translate(0,0) rotate(-6deg); } 75% { transform: rotate(6deg); } }
+.vars { align-self: center; font-family: var(--font-mono); background: var(--b-var); color: var(--on-block); border-radius: 10px; padding: 4px 14px; font-size: 0.95rem; }
+
+.status { padding: 10px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); font-size: 0.97rem; min-height: 46px; display: flex; align-items: center; }
+.status.bad { border-color: var(--bad); color: var(--bad); }
+.status.ok { border-color: var(--ok); color: var(--ok); }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.btn { border: 2px solid var(--line); background: var(--surface); border-radius: 12px; padding: 9px 16px; cursor: pointer; font-family: var(--font-display); font-size: 1.05rem; }
+.btn:hover { border-color: var(--ink-soft); }
+.btn.small { font-size: 0.9rem; padding: 5px 12px; }
+.btn.run { background: var(--run); border-color: var(--run); color: #fff; padding-inline: 22px; }
+.btn.run.stop { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.speed { display: flex; border: 2px solid var(--line); border-radius: 12px; overflow: hidden; margin-left: auto; }
+.speed button { border: none; background: var(--surface); padding: 8px 12px; cursor: pointer; font-size: 0.9rem; }
+.speed button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+/* blocks */
+.palette { display: flex; flex-wrap: wrap; gap: 8px; }
+.blk, .pal { --c: var(--b-move); }
+.cat-turn { --c: var(--b-turn); } .cat-loop { --c: var(--b-loop); } .cat-cond { --c: var(--b-cond); }
+.cat-act { --c: var(--b-act); } .cat-fn { --c: var(--b-fn); } .cat-var { --c: var(--b-var); }
+.pal, .blk-head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; background: var(--c); color: var(--on-block);
+  border: none; border-radius: 10px; padding: 7px 12px; font-family: var(--font-display); font-size: 1rem; cursor: pointer;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,0.2); text-align: left;
+}
+.pal:hover { filter: brightness(1.08); }
+.pal:active { transform: translateY(1px); }
+.ic { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: rgba(255,255,255,0.22); font-size: 0.9rem; line-height: 1; font-family: var(--font-mono); }
+
+.program { min-height: 120px; padding: 12px; border-radius: 14px; background: var(--surface-2); border: 2px dashed var(--line); }
+.program.fn { border-color: var(--b-fn); }
+.stack { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.blk { display: flex; flex-direction: column; align-items: flex-start; max-width: 100%; }
+.blk > .blk-head { padding-right: 8px; }
+.has-body > .blk-head { border-radius: 10px 10px 10px 0; }
+.blk-body { border-left: 14px solid var(--c); padding: 6px 0 6px 8px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; min-width: 130px; }
+.blk-mid, .blk-foot { background: var(--c); color: var(--on-block); border: none; cursor: pointer; text-align: left; font-family: var(--font-display); }
+.blk-mid { border-radius: 0 10px 10px 0; padding: 3px 12px; font-size: 0.95rem; }
+.blk-foot { border-radius: 0 10px 10px 10px; height: 20px; padding: 0 10px; font-size: 0.72rem; opacity: 0.92; font-family: var(--font-body); }
+.empty-note { font-size: 0.82rem; color: var(--ink-soft); padding: 4px 2px; }
+.x { border: none; background: rgba(0,0,0,0.18); color: var(--on-block); width: 24px; height: 24px; border-radius: 7px; cursor: pointer; font-size: 0.9rem; line-height: 1; }
+.x:hover { background: rgba(0,0,0,0.32); }
+.num { display: inline-flex; align-items: center; gap: 2px; background: rgba(255,255,255,0.95); color: #1b2a30; border-radius: 8px; padding: 1px 3px; font-variant-numeric: tabular-nums; }
+.num button { border: none; background: none; cursor: pointer; width: 22px; height: 22px; border-radius: 6px; font-size: 1rem; line-height: 1; color: #1b2a30; }
+.num button:hover { background: rgba(0,0,0,0.08); }
+.num span { min-width: 1.4em; text-align: center; font-family: var(--font-mono); }
+.cond, .vt { border: none; background: rgba(255,255,255,0.95); color: #1b2a30; border-radius: 8px; padding: 2px 9px; cursor: pointer; font-family: var(--font-display); font-size: 0.95rem; }
+.vt { font-size: 0.75rem; padding: 2px 7px; background: rgba(0,0,0,0.2); color: var(--on-block); }
+.iter { font-size: 0.75rem; background: rgba(0,0,0,0.25); border-radius: 6px; padding: 1px 6px; font-family: var(--font-body); }
+.iter:empty { display: none; }
+.sel { outline: 3px solid var(--ink); outline-offset: 2px; }
+.active > .blk-head { box-shadow: 0 0 0 4px var(--gem), inset 0 -3px 0 rgba(0,0,0,0.2); }
+.crash > .blk-head { box-shadow: 0 0 0 4px var(--bad), inset 0 -3px 0 rgba(0,0,0,0.2); }
+.slot { border: 2px dashed var(--ink-soft); color: var(--ink-soft); border-radius: 10px; padding: 6px 12px; font-size: 0.85rem; }
+.running .pal, .running .program button, .running .blk-head { pointer-events: none; }
+.running .palette { opacity: 0.5; }
+.code { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--ink); color: var(--bg); font-family: var(--font-mono); font-size: 0.86rem; line-height: 1.6; overflow-x: auto; white-space: pre; }
+.code .kw { color: var(--gem); }
+
+.overlay { position: fixed; inset: 0; background: var(--shade); display: grid; place-items: center; z-index: 20; padding: 16px; }
+.card { background: var(--surface); border-radius: 22px; padding: 26px 26px 22px; width: min(420px, 100%); text-align: center; display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--line); }
+.card h3 { font-family: var(--font-display); font-weight: 400; font-size: 1.8rem; margin: 0; }
+.stars { font-size: 2.4rem; letter-spacing: 6px; color: var(--line); line-height: 1; }
+.stars .on { color: var(--gem); }
+.card p { margin: 0; color: var(--ink-soft); }
+.card .extra { color: var(--gem-deep); font-family: var(--font-display); }
+.card .controls { justify-content: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gem { animation: none; }
+  .robot, .robot svg { transition: none; }
+  .rb-move.bump { animation: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1>뚝딱 코딩 로봇</h1>
+      <p>명령 블록을 쌓아서 로봇이 보석을 모으게 해 보세요. 초급부터 심화까지 한 등급씩 올라가요.</p>
+    </div>
+    <div class="progress" id="progress"></div>
+  </header>
+
+  <section id="home" class="col">
+    <div class="tiers" id="tiers"></div>
+    <label class="teacher"><input type="checkbox" id="unlockAll"> 모든 등급 열기 (선생님용)</label>
+  </section>
+
+  <section id="play" class="col" hidden>
+    <div class="playbar">
+      <button class="back" id="backBtn" type="button">← 등급 목록</button>
+      <span class="tiername" id="tiername"></span>
+      <nav class="levels" id="levels" aria-label="단계 고르기"></nav>
+    </div>
+
+    <div class="main">
+      <div class="col">
+        <section class="panel mission">
+          <div class="row"><span class="concept" id="concept"></span><span class="muted" id="lvnum"></span></div>
+          <h2 id="lvname"></h2>
+          <p class="goal" id="goal"></p>
+          <p class="tip" id="tip"></p>
+          <button class="hint-btn" id="hintBtn" type="button">힌트 보기</button>
+          <p class="hint" id="hint" hidden></p>
+        </section>
+
+        <div class="maptabs" id="maptabs" hidden></div>
+        <div class="board-wrap"><div class="board" id="board"></div></div>
+        <div class="vars" id="vars" hidden></div>
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+
+        <div class="controls">
+          <button class="btn run" id="runBtn" type="button">▶ 실행하기</button>
+          <button class="btn" id="resetBtn" type="button">처음 자리로</button>
+          <div class="speed" role="group" aria-label="속도">
+            <button type="button" data-speed="650">느리게</button>
+            <button type="button" data-speed="380" aria-pressed="true">보통</button>
+            <button type="button" data-speed="140">빠르게</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="col" id="editor">
+        <section class="panel">
+          <div class="panel-head"><h2>명령 블록</h2><span class="muted">누르면 내 프로그램에 들어가요</span></div>
+          <div class="palette" id="palette"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>내 프로그램</h2>
+            <div class="controls">
+              <span class="muted" id="count"></span>
+              <button class="btn small" id="clearBtn" type="button">모두 지우기</button>
+            </div>
+          </div>
+          <div class="program" id="program"></div>
+          <p class="muted" style="margin:0">블록을 누르면 그 다음 자리에, 반복·만약 블록의 머리를 누르면 그 안에 넣어요. 빈 곳을 누르면 맨 끝에 넣어요. 하얀 글씨 칸(조건)은 눌러서 바꿀 수 있어요.</p>
+        </section>
+
+        <section class="panel" id="fnPanel" hidden>
+          <div class="panel-head"><h2 id="fnTitle"></h2><span class="muted">나만의 블록이 할 일</span></div>
+          <div class="program fn" id="fnProgram"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h2>글자 코드로 보면</h2><span class="muted">파이썬 모양</span></div>
+          <pre class="code" id="code"></pre>
+        </section>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="overlay" id="overlay" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="winTitle">
+    <div class="stars" id="stars"></div>
+    <h3 id="winTitle">성공!</h3>
+    <p id="winMsg"></p>
+    <p class="extra" id="winExtra" hidden></p>
+    <div class="controls">
+      <button class="btn" id="againBtn" type="button">다시 해 보기</button>
+      <button class="btn run" id="nextBtn" type="button">다음 단계 →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]]; // 위, 오른쪽, 아래, 왼쪽
+
+const BLOCKS = {
+  fwd:    { label: '앞으로 가기', icon: '↑', cat: 'move' },
+  left:   { label: '왼쪽으로 돌기', icon: '↶', cat: 'turn' },
+  right:  { label: '오른쪽으로 돌기', icon: '↷', cat: 'turn' },
+  pick:   { label: '보석 줍기', icon: '◆', cat: 'act' },
+  repeat: { label: '번 반복하기', icon: '⟳', cat: 'loop' },
+  until:  { label: '반복하기', icon: '⟳', cat: 'loop' },
+  if:     { label: '만약', icon: '?', cat: 'cond' },
+  ifelse: { label: '만약 · 아니면', icon: '?', cat: 'cond' },
+  call:   { label: '내 블록', icon: 'ƒ', cat: 'fn' },
+  setvar: { label: 'n을 1(으)로 정하기', icon: 'n', cat: 'var' },
+  change: { label: 'n을 +1만큼 바꾸기', icon: 'n', cat: 'var' },
+};
+
+const COND = {
+  front: { until: '앞이 막힐 때까지', if: '앞이 막혔다면', code: 'wall_ahead()' },
+  left:  { until: '왼쪽이 막힐 때까지', if: '왼쪽이 막혔다면', code: 'wall_left()' },
+  right: { until: '오른쪽이 막힐 때까지', if: '오른쪽이 막혔다면', code: 'wall_right()' },
+  gem:   { until: '보석 위에 설 때까지', if: '보석 위에 있다면', code: 'on_gem()' },
+  goal:  { until: '깃발에 도착할 때까지', if: '깃발에 도착했다면', code: 'at_flag()' },
+};
+
+// 지도: S 출발, * 보석, # 벽, F 깃발. 방향 0 위, 1 오른쪽, 2 아래, 3 왼쪽
+const MOVE = ['fwd', 'left', 'right'];
+const ZIGZAG7 = ['S....*', '#####.', '*.....', '.#####', '.....*', '#####.', '*.....'];
+const RING6 = ['*....*', '.####.', '.####.', '.####.', '.####.', 'S....*'];
+const STAIRS = ['....*', '...*.', '..*..', '.*...', 'S....'];
+const GROW = ['......*', '...*...', '.*.....', 'S......'];
+
+const TIERS = [
+  { name: '초급', en: 'STEP 1', title: '명령 순서 익히기', concepts: ['순차 실행', '방향 바꾸기'],
+    desc: '앞으로 가기와 돌기로 로봇을 움직여요. 명령이 위에서부터 차례대로 실행된다는 걸 배워요.',
+    levels: [
+      { name: '첫 걸음', concept: '순차', dir: 1, blocks: ['fwd'], best: 4,
+        map: ['......', '......', 'S...*.', '......', '......'],
+        tip: '컴퓨터는 명령을 위에서부터 한 줄씩 차례대로 실행해요. 이것을 <b>순차 실행</b>이라고 해요.',
+        hint: '"앞으로 가기"를 몇 번 넣어야 보석에 닿을지 칸을 세어 보세요.' },
+      { name: '왼쪽으로 돌기', concept: '방향', dir: 1, blocks: MOVE, best: 3,
+        map: ['.....', '..*..', '.....', '..S..'],
+        tip: '로봇의 빨간 세모가 로봇이 보는 방향이에요. <b>돌기</b>는 제자리에서 방향만 바꿔요.',
+        hint: '로봇은 오른쪽을 보고 있어요. 보석은 위쪽에 있으니 먼저 왼쪽으로 돌아요.' },
+      { name: '모퉁이 돌기', concept: '방향', dir: 1, blocks: MOVE, best: 5,
+        map: ['......', 'S..#..', '...#..', '..*#..', '......'],
+        tip: '왼쪽, 오른쪽은 <b>로봇이 보는 쪽</b>을 기준으로 정해요. 내 몸을 로봇처럼 돌려 보면 쉬워요.',
+        hint: '두 칸 앞으로 간 다음, 오른쪽으로 돌아서 두 칸 더 가요.' },
+      { name: '뒤로 돌기', concept: '방향', dir: 1, blocks: MOVE, best: 4,
+        map: ['.....', '*.S..', '.....'],
+        tip: '뒤로 가는 명령은 없어요. 같은 쪽으로 <b>두 번 돌면</b> 뒤를 보게 돼요.',
+        hint: '오른쪽으로 두 번 돌고 앞으로 두 번 가요.' },
+      { name: '보석 두 개', concept: '순차', dir: 0, blocks: MOVE, best: 7,
+        map: ['......', '*..*..', '......', '......', 'S.....'],
+        tip: '명령이 길어져도 <b>순서</b>만 맞으면 돼요. 하나라도 순서가 바뀌면 로봇은 엉뚱한 곳으로 가요.',
+        hint: '먼저 위쪽 보석을 줍고, 오른쪽으로 돌아서 두 번째 보석으로 가요.' },
+      { name: '벽 피하기', concept: '순차', dir: 1, blocks: MOVE, best: 10,
+        map: ['.....', 'S.#.*', '.....'],
+        tip: '벽에 부딪히면 로봇이 멈춰요. 길을 손가락으로 먼저 따라가 본 다음 블록을 쌓으면 실수가 줄어요.',
+        hint: '벽 앞에서 위로 올라가 벽을 넘어간 다음, 다시 아래로 내려와요.' },
+      { name: 'ㄹ자 길', concept: '순차', dir: 1, blocks: MOVE, best: 12,
+        map: ['S.*..', '####.', '*....'],
+        tip: '긴 길은 <b>작은 조각</b>으로 나눠서 생각해요. "오른쪽으로 쭉, 아래로, 왼쪽으로 쭉"처럼요.',
+        hint: '앞으로 4번, 오른쪽으로 돌고 2번, 다시 오른쪽으로 돌고 4번.' },
+      { name: '보석 세 개', concept: '초급 마무리', dir: 0, blocks: MOVE, best: 11,
+        map: ['*.*.*', '.#.#.', '..S..'],
+        tip: '초급 마지막 문제예요. 어느 보석부터 주울지 <b>순서를 계획</b>하면 블록을 아낄 수 있어요.',
+        hint: '가운데 보석까지 올라간 다음 왼쪽 끝 보석을 줍고, 뒤로 돌아서 오른쪽 끝까지 가요.' },
+    ] },
+  { name: '초중급', en: 'STEP 2', title: '반복으로 짧게', concepts: ['반복', '패턴 찾기'],
+    desc: '같은 명령을 묶어서 되풀이해요. 되풀이되는 모양(패턴)을 찾는 눈을 길러요.',
+    levels: [
+      { name: '긴 복도', concept: '반복', dir: 1, blocks: ['fwd', 'repeat'], best: 2, limit: 2,
+        map: ['........', 'S......*', '........'],
+        tip: '같은 명령을 여러 번 쓸 때는 <b>반복하기</b> 블록으로 묶어요. 코드가 짧아지고 실수도 줄어요.',
+        hint: '"반복하기"를 넣고, 그 안에 "앞으로 가기"를 넣은 다음 횟수를 7로 맞춰요.' },
+      { name: '반복 두 번', concept: '반복', dir: 1, blocks: [...MOVE, 'repeat'], best: 5, limit: 5,
+        map: ['S.....', '......', '......', '.....*'],
+        tip: '반복이 끝나면 그 <b>다음 블록</b>이 실행돼요. 반복 블록 아래의 "끝" 띠를 누르면 반복 바깥에 블록을 넣을 수 있어요.',
+        hint: '앞으로 5번 반복, 오른쪽으로 돌기, 앞으로 3번 반복.' },
+      { name: '사각형 한 바퀴', concept: '패턴', dir: 1, blocks: [...MOVE, 'repeat'], best: 5, limit: 5,
+        map: ['S..*', '.##.', '.##.', '*..*'],
+        tip: '"3칸 가고 돌기"가 몇 번 나오나요? 반복 안에는 <b>여러 블록</b>을 함께 넣을 수 있어요.',
+        hint: '반복 안에 앞으로 3번과 오른쪽으로 돌기를 넣고, 3번 반복해요.' },
+      { name: '계단 오르기', concept: '패턴', dir: 1, blocks: [...MOVE, 'repeat'], best: 5, limit: 5, map: STAIRS,
+        tip: '계단처럼 같은 <b>모양</b>이 되풀이되면 그 한 조각만 만들고 반복하면 돼요.',
+        hint: '한 계단은 "앞으로, 왼쪽, 앞으로, 오른쪽" 4개 명령이에요. 계단은 몇 개일까요?' },
+      { name: '계단 내려가기', concept: '패턴', dir: 1, blocks: [...MOVE, 'repeat'], best: 5, limit: 5,
+        map: ['S....', '.*...', '..*..', '...*.', '....*'],
+        tip: '오르는 계단과 내려가는 계단은 무엇이 다를까요? <b>돌기 방향</b>만 바꾸면 돼요.',
+        hint: '"앞으로, 오른쪽, 앞으로, 왼쪽"을 4번 반복해요.' },
+      { name: '두 칸 계단', concept: '패턴', dir: 1, blocks: [...MOVE, 'repeat'], best: 6, limit: 6,
+        map: ['......*', '....*..', '..*....', 'S......'],
+        tip: '이번 계단은 폭이 두 칸이에요. 한 계단 조각이 <b>정확히</b> 무엇인지 먼저 찾아보세요.',
+        hint: '앞으로, 앞으로, 왼쪽, 앞으로, 오른쪽. 이 묶음을 3번 반복해요.' },
+      { name: '울퉁불퉁 길', concept: '패턴', dir: 1, blocks: [...MOVE, 'repeat'], best: 9, limit: 9,
+        map: ['.*.*.', 'S...*'],
+        tip: '로봇이 위로 올라갔다가 내려오는 <b>언덕 모양</b>이 두 번 나와요.',
+        hint: '언덕 하나: 왼쪽, 앞으로, 오른쪽, 앞으로, 오른쪽, 앞으로, 왼쪽, 앞으로. 이걸 2번 반복해요.' },
+      { name: '긴 지그재그', concept: '초중급 마무리', dir: 1, blocks: [...MOVE, 'repeat'], best: 14, limit: 14,
+        map: ['S....*', '#####.', '*.....', '.#####', '.....*'],
+        tip: '초중급 마지막 문제예요. 길쭉한 길마다 <b>반복</b>을 쓰면 블록이 크게 줄어요.',
+        hint: '앞으로 5번, 오른쪽, 앞으로 2번, 오른쪽, 앞으로 5번, 왼쪽, 앞으로 2번, 왼쪽, 앞으로 5번.' },
+    ] },
+  { name: '중급', en: 'STEP 3', title: '반복 속 반복, 버그 잡기', concepts: ['중첩 반복', '조건 반복', '디버깅'],
+    desc: '반복 안에 반복을 넣고, 막힐 때까지 반복하고, 틀린 프로그램을 찾아 고쳐요.',
+    levels: [
+      { name: '네모 길', concept: '중첩 반복', dir: 0, blocks: [...MOVE, 'repeat'], best: 4, limit: 4,
+        map: ['*...*', '.###.', '.###.', '.###.', 'S...*'],
+        tip: '반복 안에 또 반복을 넣을 수 있어요. 바깥 반복이 한 번 돌 때마다 <b>안쪽 반복</b>은 처음부터 끝까지 실행돼요.',
+        hint: '한 변은 "앞으로 4번" 다음 "오른쪽으로 돌기". 이 묶음을 3번 반복해요.' },
+      { name: '넓은 계단', concept: '중첩 반복', dir: 1, blocks: [...MOVE, 'repeat'], best: 6, limit: 6,
+        map: ['.........*', '......*...', '...*......', 'S.........'],
+        tip: '계단 한 조각 안에도 반복이 숨어 있어요. 반복을 <b>두 겹</b>으로 써 보세요.',
+        hint: '바깥 반복 3번 안에: (앞으로 3번 반복), 왼쪽, 앞으로, 오른쪽.' },
+      { name: '고장 난 로봇', concept: '디버깅', dir: 3, blocks: [...MOVE, 'repeat'], best: 5, limit: 5,
+        map: ['*....', '.*...', '..*..', '...*.', '....S'],
+        preset: [{ t: 'repeat', n: 4, body: [{ t: 'fwd' }, { t: 'right' }, { t: 'fwd' }, { t: 'right' }] }],
+        tip: '프로그래머도 실수를 해요. 프로그램 속 잘못된 곳(<b>버그</b>)을 찾아 고치는 일을 디버깅이라고 해요.',
+        hint: '실행해 보고 로봇이 처음으로 엉뚱한 쪽으로 가는 순간을 잘 보세요. 마지막 돌기 블록이 수상해요.' },
+      { name: '숫자 고치기', concept: '디버깅', dir: 0, blocks: [...MOVE, 'repeat'], best: 4, limit: 4, map: RING6,
+        preset: [{ t: 'repeat', n: 3, body: [{ t: 'repeat', n: 4, body: [{ t: 'fwd' }] }, { t: 'right' }] }],
+        tip: '모양은 맞는데 <b>숫자</b>가 틀리는 버그도 많아요. 칸 수를 직접 세어 보세요.',
+        hint: '한 변은 몇 칸일까요? 안쪽 반복의 숫자를 바꿔 보세요.' },
+      { name: '막힐 때까지', concept: '조건 반복', dir: 1, blocks: [...MOVE, 'repeat', 'until'], conds: ['front'], best: 4, limit: 4,
+        map: ['S....*', '.####.', '.####.', '*....*'],
+        tip: '<b>막힐 때까지 반복</b>은 몇 번 반복할지 몰라도 쓸 수 있어요. 매번 앞을 확인해서 막혀 있으면 멈춰요.',
+        hint: '"막힐 때까지 앞으로 가기" 다음 "오른쪽으로 돌기". 이 묶음을 3번 반복해요.' },
+      { name: '소용돌이', concept: '조건 반복', dir: 1, blocks: [...MOVE, 'repeat', 'until'], conds: ['front'], best: 4, limit: 4,
+        map: ['S....', '####.', '..*#.', '.###.', '*...*'],
+        tip: '길이가 모두 다른 길도 <b>막힐 때까지 반복</b>이면 한 가지 방법으로 갈 수 있어요.',
+        hint: '"막힐 때까지 앞으로" 다음 "오른쪽으로 돌기"를 5번 반복해요.' },
+      { name: '거꾸로 도는 로봇', concept: '디버깅', dir: 0, blocks: [...MOVE, 'repeat', 'until'], conds: ['front'], best: 4, limit: 4,
+        map: ['*...*', '.###.', '.###.', 'S###*'],
+        preset: [{ t: 'repeat', n: 3, body: [{ t: 'until', c: 'front', body: [{ t: 'fwd' }] }, { t: 'left' }] }],
+        tip: '이번에도 버그가 숨어 있어요. 먼저 실행해 보고, 로봇이 <b>어디서부터</b> 이상해지는지 찾아요.',
+        hint: '첫 번째 보석을 주운 다음 로봇이 어느 쪽으로 도나요?' },
+      { name: '지그재그 도전', concept: '중급 마무리', dir: 1, blocks: [...MOVE, 'repeat', 'until'], conds: ['front'], best: 9, limit: 13, map: ZIGZAG7,
+        tip: '중급 마지막 문제예요. 두 줄마다 <b>같은 모양</b>이 나와요. 블록 9개로 풀면 별 3개!',
+        hint: '"막힐 때까지 가고 오른쪽"을 2번, "막힐 때까지 가고 왼쪽"을 2번. 이 묶음을 다시 2번 반복해요.' },
+    ] },
+  { name: '중고급', en: 'STEP 4', title: '조건으로 판단하기', concepts: ['조건문', '센서', '여러 지도'],
+    desc: '센서로 주변을 살피고 "만약 ~라면, 아니면"으로 로봇이 스스로 판단하게 해요. 지도가 바뀌어도 통하는 프로그램을 만들어요.',
+    levels: [
+      { name: '스스로 판단하기', concept: '조건문', dir: 1, blocks: [...MOVE, 'repeat', 'if'], conds: ['front'], best: 4, limit: 4,
+        map: ['S...*', '####.', '*...*'],
+        tip: '<b>만약 ~라면</b>은 상황을 확인해서 맞을 때만 안쪽 명령을 실행해요. 로봇이 스스로 판단하게 돼요.',
+        hint: '반복 안에 "만약 앞이 막혔다면 → 오른쪽으로 돌기"와 "앞으로 가기". 10번 반복해요.' },
+      { name: '보석 줍기', concept: '동작', dir: 1, pick: true, blocks: [...MOVE, 'repeat', 'pick'], best: 4, limit: 4,
+        map: ['.......', 'S.*.*.*', '.......'],
+        tip: '이제부터는 보석 위를 지나가기만 하면 안 돼요. <b>보석 줍기</b> 블록으로 직접 주워야 해요.',
+        hint: '앞으로, 앞으로, 줍기. 이 묶음을 3번 반복해요.' },
+      { name: '보석이 어디에?', concept: '여러 지도', dir: 1, pick: true, blocks: ['fwd', 'repeat', 'if', 'pick'], conds: ['gem'], best: 4, limit: 4,
+        maps: [['.......', 'S.*..*.', '.......'], ['.......', 'S*.*...', '.......'], ['.......', 'S....**', '.......']],
+        tip: '이번엔 <b>지도가 3개</b>예요. 보석 위치가 매번 달라서, 한 프로그램으로 세 지도를 모두 통과해야 해요. 지도 버튼을 눌러 미리 볼 수 있어요.',
+        hint: '한 칸 갈 때마다 "만약 보석 위에 있다면 → 줍기". 이걸 6번 반복해요.' },
+      { name: '왼쪽일까 오른쪽일까', concept: '만약·아니면', dir: 0, blocks: [...MOVE, 'until', 'ifelse'], conds: ['front', 'left'], best: 7, limit: 7,
+        maps: [['*..##', '##.##', '##.##', '##S##'], ['##..*', '##.##', '##.##', '##S##']],
+        tip: '<b>만약 ~라면 / 아니면</b>은 둘 중 하나를 골라 실행해요. 조건이 맞으면 위쪽, 아니면 아래쪽 블록이 실행돼요.',
+        hint: '막힐 때까지 앞으로. 그다음 "만약 왼쪽이 막혔다면 → 오른쪽으로 돌기, 아니면 → 왼쪽으로 돌기". 다시 막힐 때까지 앞으로.' },
+      { name: '구불구불 길', concept: '만약·아니면', dir: 1, blocks: [...MOVE, 'repeat', 'ifelse'], conds: ['front', 'left'], best: 6, limit: 6,
+        map: ['S..#.*', '##.#.#', '##*..#', '######'],
+        tip: '만약 블록 안에 또 만약을 넣을 수 있어요. 앞이 막혔을 때 <b>어느 쪽이 열려 있는지</b> 한 번 더 확인해요.',
+        hint: '13번 반복: 만약 앞이 막혔다면 (만약 왼쪽이 막혔다면 오른쪽, 아니면 왼쪽), 아니면 앞으로.' },
+      { name: '판단 실수 고치기', concept: '디버깅', dir: 1, blocks: [...MOVE, 'repeat', 'if'], conds: ['front'], best: 4, limit: 4,
+        map: ['S..*', '###.', '*...'],
+        preset: [{ t: 'repeat', n: 8, body: [{ t: 'if', c: 'front', body: [{ t: 'left' }] }, { t: 'fwd' }] }],
+        tip: '조건문 안에도 버그가 생길 수 있어요. 조건이 맞았을 때 <b>무엇을 하는지</b> 살펴보세요.',
+        hint: '벽을 만났을 때 로봇이 도는 방향이 맞나요?' },
+      { name: '보석 찾아 줍기', concept: '여러 지도', dir: 1, pick: true, blocks: [...MOVE, 'repeat', 'if', 'pick'], conds: ['gem'], best: 9, limit: 10,
+        maps: [['S.*..*', '.####.', '*..*..'], ['S*.*.*', '.####.', '.*..*.']],
+        tip: '반복 안의 반복 안에 조건문까지! 윗줄을 다 훑고 <b>내려와서</b> 아랫줄을 반대로 훑어요.',
+        hint: '2번 반복: (5번 반복: 앞으로, 만약 보석이면 줍기), 오른쪽, 앞으로, 앞으로, 오른쪽.' },
+      { name: '갈림길 보석 사냥', concept: '중고급 마무리', dir: 0, pick: true, blocks: [...MOVE, 'repeat', 'until', 'if', 'ifelse', 'pick'], conds: ['front', 'left', 'gem'], best: 9, limit: 11,
+        maps: [['*..*.####', '####.####', '####.####', '####S####'], ['####..*.*', '####.####', '####.####', '####S####']],
+        tip: '중고급 마지막 문제예요. 갈림길에서 <b>열린 쪽</b>을 골라 가고, 보석이 있는 칸에서만 주워요.',
+        hint: '막힐 때까지 앞으로 → 만약 왼쪽이 막혔다면 오른쪽, 아니면 왼쪽 → 4번 반복(앞으로, 만약 보석이면 줍기).' },
+    ] },
+  { name: '고급', en: 'STEP 5', title: '함수와 변수', concepts: ['함수', '변수'],
+    desc: '나만의 블록(함수)을 만들어 여러 번 불러 쓰고, 숫자를 기억하는 변수 n으로 점점 변하는 길을 가요.',
+    levels: [
+      { name: '장애물 넘기', concept: '함수', dir: 1, fn: '장애물 넘기', require: 'call', blocks: [...MOVE, 'repeat', 'call'], best: 14, limit: 15,
+        map: ['.*..*...*.', 'S#..#...#*'],
+        tip: '<b>함수</b>는 여러 블록을 묶어 이름을 붙인 나만의 블록이에요. 한 번 만들어 두면 필요할 때마다 불러 써요. 아래 "장애물 넘기" 칸에 할 일을 쌓으세요.',
+        hint: '장애물 넘기: 왼쪽, 앞으로, 오른쪽, 앞으로, 앞으로, 오른쪽, 앞으로, 왼쪽. 내 프로그램: 넘기, 앞으로, 넘기, 앞으로, 앞으로, 넘기.' },
+      { name: '계단 함수', concept: '함수', dir: 1, fn: '계단 하나', require: 'call', blocks: [...MOVE, 'repeat', 'call'], best: 6, limit: 7, map: STAIRS,
+        tip: '함수와 반복을 함께 쓸 수 있어요. 함수에 <b>이름</b>이 있으니 프로그램이 무슨 일을 하는지 읽기 쉬워져요.',
+        hint: '계단 하나: 앞으로, 왼쪽, 앞으로, 오른쪽. 내 프로그램: 4번 반복(계단 하나).' },
+      { name: '함수 안의 반복', concept: '함수', dir: 0, fn: '한 변 가기', require: 'call', blocks: [...MOVE, 'repeat', 'call'], best: 5, limit: 6, map: RING6,
+        tip: '함수 안에도 반복을 넣을 수 있어요. 큰 일을 <b>작은 함수</b>로 나누는 것이 프로그래머의 비법이에요.',
+        hint: '한 변 가기: (5번 반복: 앞으로), 오른쪽. 내 프로그램: 3번 반복(한 변 가기).' },
+      { name: '변수 n', concept: '변수', dir: 0, vars: true, blocks: [...MOVE, 'repeat', 'setvar', 'change'], best: 6, limit: 7,
+        map: ['*####', '.####', '.#..*', '.#S#.', '.###.', '*...*'],
+        tip: '<b>변수</b>는 숫자를 기억하는 상자예요. n을 정하고, 바꾸고, 반복 횟수로 쓸 수 있어요. 반복 블록의 "n으로" 버튼을 눌러 보세요.',
+        hint: 'n을 1로 정하기. 5번 반복: (n번 반복: 앞으로), 오른쪽, n을 +1만큼 바꾸기.' },
+      { name: '점점 길어지는 계단', concept: '변수', dir: 1, vars: true, blocks: [...MOVE, 'repeat', 'setvar', 'change'], best: 8, limit: 9, map: GROW,
+        tip: '계단 폭이 1, 2, 3칸으로 점점 넓어져요. 반복할 때마다 <b>n이 1씩 커지면</b> 딱 맞아요.',
+        hint: 'n을 1로 정하기. 3번 반복: (n번 반복: 앞으로), 왼쪽, 앞으로, 오른쪽, n을 +1만큼 바꾸기.' },
+      { name: '작아지는 나선', concept: '변수', dir: 1, vars: true, blocks: [...MOVE, 'repeat', 'setvar', 'change'], best: 6, limit: 7,
+        map: ['S....*', '#####.', '##**#.', '##.##.', '##*..*'],
+        tip: '변수는 <b>작아질 수도</b> 있어요. 바꾸기 블록의 숫자를 -1로 만들어 보세요.',
+        hint: 'n을 5로 정하기. 5번 반복: (n번 반복: 앞으로), 오른쪽, n을 -1만큼 바꾸기.' },
+      { name: '변수 버그 잡기', concept: '디버깅', dir: 1, vars: true, blocks: [...MOVE, 'repeat', 'setvar', 'change'], best: 8, limit: 9, map: GROW,
+        preset: [{ t: 'setvar', v: 2 }, { t: 'repeat', n: 3, body: [{ t: 'repeat', useVar: true, body: [{ t: 'fwd' }] }, { t: 'left' }, { t: 'fwd' }, { t: 'right' }, { t: 'change', v: 1 }] }],
+        tip: '프로그램을 실행하면서 화면 아래의 <b>n 값</b>이 어떻게 변하는지 지켜보세요.',
+        hint: '첫 계단은 몇 칸인가요? n을 처음에 몇으로 정해야 할까요?' },
+      { name: '점점 높아지는 벽', concept: '고급 마무리', dir: 1, vars: true, fn: '벽 넘기', require: 'call', blocks: [...MOVE, 'repeat', 'call', 'setvar', 'change'], best: 15, limit: 16,
+        map: ['.......*.', '....*..#.', '.*..#..#.', 'S#..#..#*'],
+        tip: '고급 마지막 문제예요. 함수 안에서도 <b>변수 n</b>을 쓸 수 있어요. 벽이 높아질 때마다 n을 키우세요.',
+        hint: '벽 넘기: 왼쪽, (n번: 앞으로), 오른쪽, 앞으로, 앞으로, 오른쪽, (n번: 앞으로), 왼쪽. 내 프로그램: n을 1로, 3번 반복(벽 넘기, 앞으로, n을 +1).' },
+    ] },
+  { name: '심화', en: 'STEP 6', title: '알고리즘으로 생각하기', concepts: ['알고리즘', '일반화', '최적화'],
+    desc: '어떤 미로든 빠져나오는 방법, 방을 빠짐없이 도는 방법처럼 문제를 푸는 규칙(알고리즘)을 설계해요.',
+    levels: [
+      { name: '오른손 미로', concept: '알고리즘', dir: 1, blocks: [...MOVE, 'until', 'ifelse'], conds: ['goal', 'right', 'front'], best: 7, limit: 8,
+        map: ['S..#...', '##.#.#.', '.....#.', '.###.#.', '...#..F'],
+        tip: '미로에서 <b>오른손을 벽에 대고</b> 계속 걸으면 언젠가 출구에 닿아요. 이런 문제 해결 규칙을 알고리즘이라고 해요.',
+        hint: '깃발에 도착할 때까지: 만약 오른쪽이 막혔다면 (만약 앞이 막혔다면 왼쪽, 아니면 앞으로), 아니면 (오른쪽, 앞으로).' },
+      { name: '미로 두 개', concept: '일반화', dir: 1, blocks: [...MOVE, 'until', 'ifelse'], conds: ['goal', 'right', 'front'], best: 7, limit: 8,
+        maps: [['S.....#', '.####.#', '.#..#..', '.#.##.#', '...#...', '##...#F'], ['S#....F', '.#.##.#', '...#..#', '#.##.##', '#....#.', '###....']],
+        tip: '좋은 알고리즘은 <b>어떤 미로에서도</b> 통해요. 지난 단계의 규칙이 두 미로 모두에서 통하는지 확인해 보세요.',
+        hint: '"오른손 미로"에서 쓴 프로그램을 그대로 다시 만들어 보세요.' },
+      { name: '어떤 길이든', concept: '일반화', blocks: [...MOVE, 'until', 'ifelse'], conds: ['goal', 'front', 'left'], best: 6, limit: 7,
+        maps: [
+          { dir: 1, map: ['S..##', '##.##', '##...', '####F'] },
+          { dir: 0, map: ['##...', '##.#F', '...##', 'S####'] },
+          { dir: 1, map: ['#####F', '##....', '##.###', 'S..###'] },
+        ],
+        tip: '세 길은 모양도, 출발 방향도 달라요. 갈림길이 없는 길이라면 <b>앞이 막혔을 때 열린 쪽으로</b> 돌기만 하면 돼요.',
+        hint: '깃발에 도착할 때까지: 만약 앞이 막혔다면 (만약 왼쪽이 막혔다면 오른쪽, 아니면 왼쪽), 아니면 앞으로.' },
+      { name: '방 청소 로봇', concept: '알고리즘', dir: 1, pick: true, fn: '가며 줍기', blocks: [...MOVE, 'repeat', 'until', 'if', 'pick', 'call'], conds: ['front', 'gem'], best: 14, limit: 20,
+        maps: [['S..*..', '.*....', '....*.', '*....*'], ['S....*', '..*...', '.*..*.', '...*..']],
+        tip: '로봇 청소기처럼 방을 <b>한 줄씩 빠짐없이</b> 훑어요. "한 칸 가고 보석이면 줍기"를 함수로 만들면 훨씬 짧아져요.',
+        hint: '가며 줍기: 앞으로, 만약 보석이면 줍기. 2번 반복: 막힐 때까지(가며 줍기), 오른쪽, 가며 줍기, 오른쪽, 막힐 때까지(가며 줍기), 왼쪽, 가며 줍기, 왼쪽.' },
+      { name: '최소 블록 도전', concept: '최적화', dir: 1, blocks: [...MOVE, 'repeat', 'until'], conds: ['front'], best: 9, limit: 9, map: ZIGZAG7,
+        tip: '같은 일을 하는 프로그램이라도 <b>더 짧고 깔끔한</b> 게 좋아요. 이번엔 블록 9개만 쓸 수 있어요.',
+        hint: '반복 2겹: 바깥 2번 안에 (2번: 막힐 때까지 앞으로, 오른쪽)과 (2번: 막힐 때까지 앞으로, 왼쪽).' },
+      { name: '미로 로봇 고치기', concept: '디버깅', dir: 1, blocks: [...MOVE, 'until', 'ifelse'], conds: ['goal', 'right', 'front'], best: 7, limit: 8,
+        map: ['S.#....', '..#.##.', '.##..#.', '....#..', '.##...F'],
+        preset: [{ t: 'until', c: 'goal', body: [{ t: 'ifelse', c: 'right', body: [{ t: 'ifelse', c: 'front', body: [{ t: 'left' }], else: [{ t: 'fwd' }] }], else: [{ t: 'right' }] }] }],
+        tip: '오른손 알고리즘에 버그가 하나 숨어 있어요. 로봇이 <b>같은 자리를 맴돌면</b> 어느 블록 때문인지 생각해 보세요.',
+        hint: '오른쪽이 열려 있을 때 로봇은 돌기만 하고 끝나요. 돈 다음에 무엇을 해야 할까요?' },
+      { name: '보석 미로', concept: '알고리즘', dir: 1, blocks: [...MOVE, 'until', 'ifelse'], conds: ['goal', 'right', 'front'], best: 7, limit: 8,
+        map: ['S..#...', '#.##.#.', '*...*#.', '.##.##*', '.*.#..F'],
+        tip: '오른손 규칙으로 걸으면 <b>막다른 길</b>까지 다 들렀다가 나와요. 그래서 구석의 보석도 놓치지 않아요.',
+        hint: '오른손 미로와 같은 알고리즘이에요. 보석은 가는 길에 저절로 주워져요.' },
+      { name: '졸업 미로', concept: '심화 마무리', dir: 1, blocks: [...MOVE, 'repeat', 'until', 'if', 'ifelse'], conds: ['goal', 'right', 'front', 'left'], best: 7, limit: 10,
+        maps: [['S...#....', '.##.#.##.', '.#....#..', '.#.####.#', '...#*...#', '##.#.##.#', '*..*.#..F'], ['S#*....*.', '.#.####.#', '...#..#..', '##.#.##..', '*..#...#.', '.#####.#.', '..*....#F']],
+        tip: '모든 등급의 마지막 문제예요! 큰 미로 두 개를 <b>한 프로그램</b>으로 통과하고, 보석도 모두 모아 보세요.',
+        hint: '오른손 알고리즘이면 두 미로 모두 풀 수 있어요.' },
+    ] },
+];
+
+const STORE_KEY = 'ddukttak-coding-v2';
+let saved = { stars: {}, last: null, unlockAll: false };
+try { const s = JSON.parse(localStorage.getItem(STORE_KEY)); if (s && s.stars) saved = Object.assign(saved, s); } catch (e) {}
+function persist() { try { localStorage.setItem(STORE_KEY, JSON.stringify(saved)); } catch (e) {} }
+
+const $ = id => document.getElementById(id);
+const boardEl = $('board'), progEl = $('program'), fnEl = $('fnProgram'), statusEl = $('status');
+const levelId = (t, l) => `${t + 1}-${l + 1}`;
+const clearedIn = t => TIERS[t].levels.filter((_, l) => saved.stars[levelId(t, l)]).length;
+const tierUnlocked = t => t === 0 || saved.unlockAll || clearedIn(t - 1) >= 6;
+
+let tierIdx = 0, lvIdx = 0, L, maps, mapIdx = 0, passed = [];
+let grid, rows, cols, start, flag, gemList, cells;
+let robot, rot, gemsLeft, robotEl, vars = { n: 0 };
+let prog = { main: [], fn: [] }, sel = null, uid = 0;
+let running = false, stopReq = false, steps = 0, speed = 380;
+
+/* ---------- 프로그램 데이터 ---------- */
+const CONTAINERS = ['repeat', 'until', 'if', 'ifelse'];
+function defaultCond(type) {
+  const cs = L.conds || ['front'];
+  return type === 'until' ? cs[0] : cs.find(c => c !== 'goal') || cs[0];
+}
+function mk(type) {
+  const n = { id: ++uid, type };
+  if (type === 'repeat') { n.n = 3; n.useVar = false; }
+  if (CONTAINERS.includes(type)) n.body = [];
+  if (type === 'ifelse') n.else = [];
+  if (type === 'until' || type === 'if' || type === 'ifelse') n.cond = defaultCond(type);
+  if (type === 'setvar' || type === 'change') n.v = 1;
+  return n;
+}
+function fromSpec(list) {
+  return list.map(s => {
+    const n = mk(s.t);
+    if (s.n) n.n = s.n;
+    if (s.v != null) n.v = s.v;
+    if (s.c) n.cond = s.c;
+    if (s.useVar) n.useVar = true;
+    if (s.body) n.body = fromSpec(s.body);
+    if (s.else) n.else = fromSpec(s.else);
+    return n;
+  });
+}
+function count(list) { return list.reduce((a, n) => a + 1 + (n.body ? count(n.body) : 0) + (n.else ? count(n.else) : 0), 0); }
+const totalCount = () => count(prog.main) + count(prog.fn);
+function uses(list, type) { return list.some(n => n.type === type || (n.body && uses(n.body, type)) || (n.else && uses(n.else, type))); }
+function locate(id, list) {
+  for (let i = 0; i < list.length; i++) {
+    const n = list[i];
+    if (n.id === id) return { list, index: i, node: n };
+    const f = (n.body && locate(id, n.body)) || (n.else && locate(id, n.else));
+    if (f) return f;
+  }
+  return null;
+}
+const locateAny = id => locate(id, prog.main) || locate(id, prog.fn);
+const isSel = (id, mode) => sel && sel.id === id && sel.mode === mode;
+
+function addBlock(type) {
+  if (running) return;
+  if (L.limit && totalCount() >= L.limit) {
+    setStatus(`이번 단계는 블록을 ${L.limit}개까지만 쓸 수 있어요. 더 짧게 만들 방법을 찾아보세요!`, 'bad');
+    return;
+  }
+  const n = mk(type);
+  const at = sel && sel.id && locateAny(sel.id);
+  if (!at) {
+    (sel && sel.root === 'fn' ? prog.fn : prog.main).push(n);
+    if (n.body) sel = { id: n.id, mode: 'inside' };
+  } else {
+    if (sel.mode === 'inside') at.node.body.push(n);
+    else if (sel.mode === 'else') at.node.else.push(n);
+    else at.list.splice(at.index + 1, 0, n);
+    sel = { id: n.id, mode: n.body ? 'inside' : 'after' };
+  }
+  resetWorld();
+  renderProgram();
+  setStatus('');
+}
+function removeBlock(id) {
+  const at = locateAny(id);
+  if (!at) return;
+  at.list.splice(at.index, 1);
+  if (sel && sel.id && !locateAny(sel.id)) sel = null;
+  resetWorld();
+  renderProgram();
+}
+
+/* ---------- 프로그램 그리기 ---------- */
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function btn(cls, text, label, onclick) {
+  const b = el('button', cls, text);
+  b.type = 'button';
+  if (label) b.setAttribute('aria-label', label);
+  b.onclick = e => { e.stopPropagation(); if (!running) onclick(); };
+  return b;
+}
+const makeSlot = () => el('div', 'slot', '다음 블록이 여기에 들어가요');
+function renderList(list, parent) {
+  for (const node of list) {
+    parent.appendChild(makeBlock(node));
+    if (isSel(node.id, 'after')) parent.appendChild(makeSlot());
+  }
+}
+function numCtl(node, key, min, max, signed) {
+  const wrap = el('span', 'num');
+  const show = v => (signed && v > 0 ? '+' : '') + v;
+  const step = d => {
+    let v = node[key] + d;
+    if (signed && v === 0) v += d;
+    node[key] = Math.max(min, Math.min(max, v));
+    renderProgram();
+  };
+  wrap.append(btn('', '−', '줄이기', () => step(-1)), el('span', '', show(node[key])), btn('', '+', '늘리기', () => step(1)));
+  return wrap;
+}
+function condChip(node, kind) {
+  const cs = L.conds || ['front'];
+  const b = btn('cond', COND[node.cond][kind] + (cs.length > 1 ? ' ▾' : ''), '조건 바꾸기', () => {
+    if (cs.length < 2) return;
+    node.cond = cs[(cs.indexOf(node.cond) + 1) % cs.length];
+    renderProgram();
+  });
+  return b;
+}
+function makeBlock(node) {
+  const meta = BLOCKS[node.type];
+  const wrap = el('div', `blk cat-${meta.cat}${node.body ? ' has-body' : ''}`);
+  wrap.dataset.id = node.id;
+  const head = el('div', 'blk-head');
+  head.tabIndex = 0;
+  head.setAttribute('role', 'button');
+  head.appendChild(el('span', 'ic', meta.icon));
+  switch (node.type) {
+    case 'repeat':
+      head.append(node.useVar ? el('span', 'num', 'n') : numCtl(node, 'n', 2, 20), el('span', '', '번 반복하기'));
+      if (L.vars) head.append(btn('vt', node.useVar ? '숫자로' : 'n으로', '반복 횟수 종류 바꾸기', () => { node.useVar = !node.useVar; renderProgram(); }));
+      break;
+    case 'until': head.append(condChip(node, 'until'), el('span', '', '반복하기')); break;
+    case 'if': case 'ifelse': head.append(el('span', '', '만약'), condChip(node, 'if')); break;
+    case 'setvar': head.append(el('span', '', 'n을'), numCtl(node, 'v', 0, 9), el('span', '', '(으)로 정하기')); break;
+    case 'change': head.append(el('span', '', 'n을'), numCtl(node, 'v', -3, 3, true), el('span', '', '만큼 바꾸기')); break;
+    case 'call': head.append(el('span', '', L.fn)); break;
+    default: head.append(el('span', '', meta.label));
+  }
+  if (node.body) { const it = el('span', 'iter'); it.dataset.iter = node.id; head.appendChild(it); }
+  head.appendChild(btn('x', '×', '블록 지우기', () => removeBlock(node.id)));
+  const pick = mode => e => { e.stopPropagation(); if (running) return; sel = { id: node.id, mode }; renderProgram(); };
+  head.onclick = pick(node.body ? 'inside' : 'after');
+  head.onkeydown = e => { if (e.target === head && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); head.onclick(e); } };
+  if (isSel(node.id, node.body ? 'inside' : 'after')) head.classList.add('sel');
+  wrap.appendChild(head);
+
+  if (node.body) {
+    const branch = (list, mode) => {
+      const body = el('div', 'blk-body');
+      renderList(list, body);
+      if (isSel(node.id, mode)) body.appendChild(makeSlot());
+      else if (!list.length) body.appendChild(el('div', 'empty-note', '안이 비어 있어요'));
+      return body;
+    };
+    wrap.appendChild(branch(node.body, 'inside'));
+    if (node.type === 'ifelse') {
+      const mid = el('button', 'blk-mid', '아니면');
+      mid.type = 'button';
+      mid.onclick = pick('else');
+      if (isSel(node.id, 'else')) mid.classList.add('sel');
+      wrap.append(mid, branch(node.else, 'else'));
+    }
+    const foot = el('button', 'blk-foot', '끝 · 다음은 여기 뒤에');
+    foot.type = 'button';
+    foot.onclick = pick('after');
+    if (isSel(node.id, 'after')) foot.classList.add('sel');
+    wrap.appendChild(foot);
+  }
+  return wrap;
+}
+function renderRoot(container, list, endSel, emptyText) {
+  container.innerHTML = '';
+  const stack = el('div', 'stack');
+  renderList(list, stack);
+  if (endSel) stack.appendChild(el('div', 'slot', list.length ? '다음 블록이 여기에 들어가요' : emptyText));
+  else if (!list.length) stack.appendChild(el('div', 'empty-note', '비어 있어요. 여기를 누르고 블록을 넣어요.'));
+  container.appendChild(stack);
+}
+function renderProgram() {
+  renderRoot(progEl, prog.main, !sel, '위의 명령 블록을 누르면 여기에 쌓여요');
+  if (L.fn) renderRoot(fnEl, prog.fn, sel && sel.root === 'fn', `'${L.fn}' 블록이 할 일을 여기에 쌓아요`);
+  const c = totalCount();
+  $('count').textContent = L.limit ? `블록 ${c} / ${L.limit}개` : `블록 ${c}개`;
+  renderCode();
+}
+function rootClick(rootSel) {
+  return e => {
+    if (running) return;
+    const t = e.target;
+    if (t.classList.contains('program') || t.classList.contains('stack') || (t.parentElement && t.parentElement.classList.contains('stack') && (t.classList.contains('slot') || t.classList.contains('empty-note')))) {
+      sel = rootSel;
+      renderProgram();
+    }
+  };
+}
+progEl.addEventListener('click', rootClick(null));
+fnEl.addEventListener('click', rootClick({ root: 'fn' }));
+
+function renderCode() {
+  const kw = w => `<span class="kw">${w}</span>`;
+  const fnId = L.fn ? L.fn.replace(/\s+/g, '_') : '';
+  const lines = [];
+  const walk = (list, d) => {
+    const pad = '    '.repeat(d);
+    if (!list.length && d > 0) lines.push(pad + kw('pass'));
+    for (const n of list) {
+      switch (n.type) {
+        case 'fwd': lines.push(pad + 'forward()'); break;
+        case 'left': lines.push(pad + 'turn_left()'); break;
+        case 'right': lines.push(pad + 'turn_right()'); break;
+        case 'pick': lines.push(pad + 'pick_up()'); break;
+        case 'call': lines.push(`${pad}${fnId}()`); break;
+        case 'setvar': lines.push(`${pad}n = ${n.v}`); break;
+        case 'change': lines.push(`${pad}n = n ${n.v > 0 ? '+' : '-'} ${Math.abs(n.v)}`); break;
+        case 'repeat': lines.push(`${pad}${kw('for')} _ ${kw('in')} range(${n.useVar ? 'n' : n.n}):`); walk(n.body, d + 1); break;
+        case 'until': lines.push(`${pad}${kw('while not')} ${COND[n.cond].code}:`); walk(n.body, d + 1); break;
+        case 'if': lines.push(`${pad}${kw('if')} ${COND[n.cond].code}:`); walk(n.body, d + 1); break;
+        case 'ifelse':
+          lines.push(`${pad}${kw('if')} ${COND[n.cond].code}:`); walk(n.body, d + 1);
+          lines.push(`${pad}${kw('else')}:`); walk(n.else, d + 1); break;
+      }
+    }
+  };
+  if (L.fn) { lines.push(`${kw('def')} ${fnId}():`); walk(prog.fn, 1); lines.push(''); }
+  walk(prog.main, 0);
+  $('code').innerHTML = prog.main.length || prog.fn.length ? lines.join('\n') : '# 아직 비어 있어요';
+}
+
+/* ---------- 지도와 로봇 ---------- */
+const ROBOT_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true">
+  <path d="M50 4 L63 21 H37 Z" fill="var(--run)"/>
+  <rect x="15" y="60" width="17" height="26" rx="6" fill="var(--robot)"/>
+  <rect x="68" y="60" width="17" height="26" rx="6" fill="var(--robot)"/>
+  <rect x="22" y="24" width="56" height="54" rx="15" fill="var(--robot)"/>
+  <rect x="30" y="33" width="40" height="23" rx="9" fill="var(--robot-face)"/>
+  <circle cx="41" cy="44.5" r="4.2" fill="var(--robot)"/>
+  <circle cx="59" cy="44.5" r="4.2" fill="var(--robot)"/>
+  <rect x="40" y="64" width="20" height="5" rx="2.5" fill="var(--robot-face)"/>
+</svg>`;
+const GEM_SVG = `<svg class="gem" viewBox="0 0 40 40" aria-hidden="true">
+  <path d="M12 6 H28 L36 16 L20 36 L4 16 Z" fill="var(--gem)"/>
+  <path d="M4 16 H36 L20 36 Z" fill="var(--gem-deep)" opacity="0.55"/>
+  <path d="M12 6 L16 16 H4 Z" fill="#fff" opacity="0.35"/>
+</svg>`;
+const FLAG_SVG = `<svg class="flag" viewBox="0 0 40 40" aria-hidden="true">
+  <rect x="9" y="4" width="3.5" height="33" rx="1.5" fill="var(--ink-soft)"/>
+  <path d="M12.5 5 L34 12 L12.5 20 Z" fill="var(--run)"/>
+</svg>`;
+
+const levelMaps = lv => (lv.maps || [lv.map]).map(m => (Array.isArray(m) ? { map: m, dir: lv.dir } : m));
+
+function loadMap(i) {
+  mapIdx = i;
+  const m = maps[i];
+  grid = m.map.map(r => r.split(''));
+  rows = grid.length; cols = grid[0].length; gemList = []; flag = null;
+  boardEl.innerHTML = '';
+  boardEl.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  boardEl.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+  boardEl.style.aspectRatio = `${cols} / ${rows}`;
+  boardEl.style.width = `min(100%, ${Math.round((cols / rows) * 46)}vh, ${cols * 84}px)`;
+  cells = [];
+  for (let r = 0; r < rows; r++) {
+    cells.push([]);
+    for (let c = 0; c < cols; c++) {
+      const ch = grid[r][c];
+      const cell = el('div', 'cell' + (ch === '#' ? ' wall' : '') + (ch === 'S' ? ' start' : ''));
+      if (c === cols - 1) cell.style.borderRight = 'none';
+      if (r === rows - 1) cell.style.borderBottom = 'none';
+      if (ch === 'S') start = { r, c, dir: m.dir };
+      if (ch === '*') { gemList.push(r + ',' + c); cell.innerHTML = GEM_SVG; }
+      if (ch === 'F') { flag = { r, c }; cell.innerHTML = FLAG_SVG; }
+      boardEl.appendChild(cell);
+      cells[r].push(cell);
+    }
+  }
+  robotEl = el('div', 'robot');
+  robotEl.innerHTML = `<div class="rb-move">${ROBOT_SVG}</div>`;
+  robotEl.style.width = `${100 / cols}%`;
+  robotEl.style.height = `${100 / rows}%`;
+  boardEl.setAttribute('aria-label', `${cols}×${rows} 지도, 보석 ${gemList.length}개${flag ? ', 깃발 1개' : ''}`);
+  boardEl.appendChild(robotEl);
+  resetWorld();
+  renderMapTabs();
+}
+function renderMapTabs() {
+  const box = $('maptabs');
+  box.hidden = maps.length < 2;
+  box.innerHTML = '';
+  if (maps.length < 2) return;
+  maps.forEach((_, i) => {
+    const b = el('button', passed[i] ? 'pass' : '', `지도 ${i + 1}${passed[i] ? ' ✓' : ''}`);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(i === mapIdx));
+    b.onclick = () => { if (!running) { loadMap(i); setStatus(''); } };
+    box.appendChild(b);
+  });
+}
+function placeRobot(instant) {
+  if (instant) robotEl.classList.add('instant');
+  robotEl.style.left = `${(robot.c * 100) / cols}%`;
+  robotEl.style.top = `${(robot.r * 100) / rows}%`;
+  robotEl.querySelector('svg').style.transform = `rotate(${rot}deg)`;
+  if (instant) { void robotEl.offsetWidth; robotEl.classList.remove('instant'); }
+}
+function resetWorld() {
+  robot = { r: start.r, c: start.c, dir: start.dir };
+  rot = start.dir * 90;
+  gemsLeft = new Set(gemList);
+  boardEl.querySelectorAll('.gem').forEach(g => g.classList.remove('got'));
+  placeRobot(true);
+  vars.n = 0;
+  showVars();
+  clearMarks();
+}
+function showVars() {
+  $('vars').hidden = !L.vars;
+  $('vars').textContent = `변수 n = ${vars.n}`;
+}
+function isBlocked(r, c) { return r < 0 || c < 0 || r >= rows || c >= cols || grid[r][c] === '#'; }
+function blockedDir(d) { const [dr, dc] = DIRS[d]; return isBlocked(robot.r + dr, robot.c + dc); }
+function condTrue(c) {
+  switch (c) {
+    case 'front': return blockedDir(robot.dir);
+    case 'left': return blockedDir((robot.dir + 3) % 4);
+    case 'right': return blockedDir((robot.dir + 1) % 4);
+    case 'gem': return gemsLeft.has(robot.r + ',' + robot.c);
+    case 'goal': return !!flag && robot.r === flag.r && robot.c === flag.c;
+  }
+  return false;
+}
+
+/* ---------- 실행 ---------- */
+const wait = ms => new Promise(res => setTimeout(res, ms));
+async function pause(f = 1) { await wait(speed * f); if (stopReq) throw { kind: 'stop' }; }
+function tick() { if (++steps > 1500) throw { kind: 'long' }; }
+function clearMarks() {
+  $('editor').querySelectorAll('.active, .crash').forEach(e => e.classList.remove('active', 'crash'));
+  $('editor').querySelectorAll('.iter').forEach(e => (e.textContent = ''));
+}
+function mark(id) {
+  $('editor').querySelectorAll('.blk.active').forEach(e => e.classList.remove('active'));
+  const w = $('editor').querySelector(`.blk[data-id="${id}"]`);
+  if (w) w.classList.add('active');
+}
+function setIter(id, text) { const it = $('editor').querySelector(`[data-iter="${id}"]`); if (it) it.textContent = text; }
+async function checkWin() {
+  if (!gemsLeft.size && (!flag || condTrue('goal'))) { await wait(350); throw { kind: 'win' }; }
+}
+function takeGem(r, c) {
+  gemsLeft.delete(r + ',' + c);
+  const g = cells[r][c].querySelector('.gem');
+  if (g) g.classList.add('got');
+}
+
+async function move() {
+  tick();
+  const [dr, dc] = DIRS[robot.dir];
+  const nr = robot.r + dr, nc = robot.c + dc;
+  if (isBlocked(nr, nc)) {
+    const b = robotEl.querySelector('.rb-move');
+    b.style.setProperty('--bx', `${dc * 22}%`);
+    b.style.setProperty('--by', `${dr * 22}%`);
+    b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump');
+    await wait(500);
+    throw { kind: 'crash' };
+  }
+  robot.r = nr; robot.c = nc;
+  placeRobot();
+  await pause();
+  if (!L.pick && gemsLeft.has(nr + ',' + nc)) takeGem(nr, nc);
+  await checkWin();
+}
+async function turn(d) {
+  tick();
+  robot.dir = (robot.dir + d + 4) % 4;
+  rot += d * 90;
+  placeRobot();
+  await pause(0.8);
+}
+async function pickUp() {
+  tick();
+  if (!gemsLeft.has(robot.r + ',' + robot.c)) { await pause(0.4); throw { kind: 'nogem' }; }
+  takeGem(robot.r, robot.c);
+  await pause(0.6);
+  await checkWin();
+}
+async function exec(list, depth = 0) {
+  if (depth > 40) throw { kind: 'long' };
+  for (const node of list) {
+    if (stopReq) throw { kind: 'stop' };
+    mark(node.id);
+    switch (node.type) {
+      case 'fwd': await move(); break;
+      case 'left': await turn(-1); break;
+      case 'right': await turn(1); break;
+      case 'pick': await pickUp(); break;
+      case 'call': tick(); await pause(0.3); await exec(prog.fn, depth + 1); break;
+      case 'setvar': tick(); vars.n = node.v; showVars(); await pause(0.5); break;
+      case 'change': tick(); vars.n += node.v; showVars(); await pause(0.5); break;
+      case 'repeat': {
+        const times = node.useVar ? vars.n : node.n;
+        if (times <= 0) { setIter(node.id, '0번'); await pause(0.4); }
+        for (let i = 0; i < times; i++) {
+          tick();
+          setIter(node.id, `${i + 1}/${times}`);
+          mark(node.id);
+          await exec(node.body, depth);
+        }
+        setIter(node.id, '');
+        break;
+      }
+      case 'until': {
+        let i = 0;
+        while (true) {
+          tick();
+          mark(node.id);
+          await pause(0.3);
+          if (condTrue(node.cond)) break;
+          setIter(node.id, `${++i}번째`);
+          await exec(node.body, depth);
+        }
+        setIter(node.id, '');
+        break;
+      }
+      case 'if':
+      case 'ifelse': {
+        tick();
+        await pause(0.3);
+        const yes = condTrue(node.cond);
+        setIter(node.id, yes ? '맞아요' : '아니에요');
+        if (yes) await exec(node.body, depth);
+        else if (node.type === 'ifelse') await exec(node.else, depth);
+        else await pause(0.2);
+        setIter(node.id, '');
+        break;
+      }
+    }
+  }
+}
+
+async function run() {
+  if (running) { stopReq = true; return; }
+  if (!prog.main.length) { setStatus('먼저 명령 블록을 넣어 주세요.', 'bad'); return; }
+  $('overlay').hidden = true;
+  sel = null; renderProgram();
+  running = true; stopReq = false; passed = [];
+  setRunning(true);
+  let result = 'win', failedMap = 0;
+  for (let m = 0; m < maps.length; m++) {
+    loadMap(m);
+    steps = 0;
+    setStatus(maps.length > 1 ? `지도 ${m + 1}에서 실행하고 있어요…` : '로봇이 프로그램을 실행하고 있어요…');
+    await wait(250);
+    result = 'incomplete';
+    try { await exec(prog.main); }
+    catch (e) {
+      if (e && e.kind) result = e.kind;
+      else { console.error(e); result = 'error'; }
+    }
+    if (result !== 'win') { failedMap = m; break; }
+    passed[m] = true;
+    renderMapTabs();
+    if (m < maps.length - 1) {
+      setStatus(`지도 ${m + 1} 통과! 다음 지도로 가요.`, 'ok');
+      await wait(900);
+      if (stopReq) { result = 'stop'; failedMap = m + 1; break; }
+    }
+  }
+  const act = $('editor').querySelector('.blk.active');
+  running = false;
+  setRunning(false);
+  if (result === 'crash' && act) { act.classList.remove('active'); act.classList.add('crash'); }
+  else clearMarks();
+
+  if (result === 'win') {
+    if (L.require === 'call' && !uses(prog.main, 'call')) {
+      setStatus(`보석은 다 모았지만, 이번 단계는 '${L.fn}' 블록을 꼭 써야 해요. 나만의 블록을 만들어 불러 보세요.`, 'bad');
+      return;
+    }
+    return win();
+  }
+  const left = gemsLeft.size;
+  let incomplete = `프로그램이 끝났는데 보석이 ${left}개 남았어요. 어디까지 갔는지 보고 블록을 고쳐 보세요.`;
+  if (flag && !left) incomplete = '보석은 다 모았지만 깃발에 도착하지 못했어요.';
+  else if (flag && condTrue('goal')) incomplete = `깃발에 왔지만 보석이 ${left}개 남았어요.`;
+  const msg = {
+    crash: '앗, 벽에 부딪혔어요! 빨간 테두리 블록에서 부딪혔어요. 그 앞을 살펴볼까요?',
+    nogem: '보석이 없는 칸에서 줍기를 했어요. 보석 위에 섰을 때만 주워야 해요.',
+    incomplete,
+    long: '로봇이 너무 오래 움직이고 있어서 멈췄어요. 끝나지 않는 반복이 있는지 확인해 보세요.',
+    stop: '멈췄어요. 고친 다음 다시 실행해 보세요.',
+    error: '알 수 없는 문제가 생겼어요. 다시 실행해 보세요.',
+  }[result];
+  const prefix = maps.length > 1 && result !== 'stop' ? `지도 ${failedMap + 1}: ` : '';
+  setStatus(prefix + msg, result === 'stop' ? '' : 'bad');
+}
+function setRunning(on) {
+  $('editor').classList.toggle('running', on);
+  const b = $('runBtn');
+  b.textContent = on ? '■ 멈추기' : '▶ 실행하기';
+  b.classList.toggle('stop', on);
+}
+function setStatus(text, kind) {
+  statusEl.textContent = text || (maps && maps.length > 1
+    ? `지도 ${maps.length}개를 한 프로그램으로 모두 통과해야 해요. 블록을 쌓고 ▶ 실행하기를 눌러요.`
+    : '준비 완료! 블록을 쌓고 ▶ 실행하기를 눌러요.');
+  statusEl.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+/* ---------- 성공 ---------- */
+function starsFor(used) { return used <= L.best ? 3 : used <= L.best + 2 ? 2 : 1; }
+function nextTarget() {
+  const tier = TIERS[tierIdx];
+  if (lvIdx < tier.levels.length - 1) return { t: tierIdx, l: lvIdx + 1, label: '다음 단계 →' };
+  if (tierIdx < TIERS.length - 1) {
+    if (tierUnlocked(tierIdx + 1)) return { t: tierIdx + 1, l: 0, label: `다음 등급: ${TIERS[tierIdx + 1].name} →` };
+    return { home: true, label: '등급 목록으로' };
+  }
+  return null;
+}
+function win() {
+  const used = totalCount();
+  const s = starsFor(used);
+  const id = levelId(tierIdx, lvIdx);
+  const before = clearedIn(tierIdx);
+  const nextWasOpen = tierIdx < TIERS.length - 1 && tierUnlocked(tierIdx + 1);
+  saved.stars[id] = Math.max(saved.stars[id] || 0, s);
+  persist();
+  renderLevels();
+  renderProgress();
+  const after = clearedIn(tierIdx);
+  const tier = TIERS[tierIdx];
+  $('stars').innerHTML = [1, 2, 3].map(i => `<span class="${i <= s ? 'on' : ''}">★</span>`).join('');
+  $('winTitle').textContent = s === 3 ? '완벽해요!' : '성공!';
+  $('winMsg').textContent = s === 3
+    ? `블록 ${used}개로 성공했어요.`
+    : `블록 ${used}개로 성공! ${L.best}개로도 풀 수 있어요. 더 짧게 만들어 볼까요?`;
+  const extras = [];
+  if (after === tier.levels.length && before < after) extras.push(`${tier.name} 배지를 받았어요!`);
+  if (!nextWasOpen && tierIdx < TIERS.length - 1 && tierUnlocked(tierIdx + 1)) extras.push(`새 등급 '${TIERS[tierIdx + 1].name}'이(가) 열렸어요!`);
+  const next = nextTarget();
+  if (!next) extras.push('모든 등급의 마지막 문제까지 끝냈어요. 진짜 코딩 졸업생이에요!');
+  $('winExtra').hidden = !extras.length;
+  $('winExtra').textContent = extras.join(' ');
+  $('nextBtn').hidden = !next;
+  if (next) $('nextBtn').textContent = next.label;
+  setStatus(flag ? '깃발에 도착했어요!' : '보석을 모두 모았어요!', 'ok');
+  $('overlay').hidden = false;
+  ($('nextBtn').hidden ? $('againBtn') : $('nextBtn')).focus();
+}
+
+/* ---------- 화면 구성 ---------- */
+function renderProgress() {
+  const total = TIERS.reduce((a, t) => a + t.levels.length * 3, 0);
+  const got = Object.values(saved.stars).reduce((a, b) => a + b, 0);
+  $('progress').innerHTML = `별 <b>${got}</b> / ${total}`;
+}
+function renderHome() {
+  const box = $('tiers');
+  box.innerHTML = '';
+  TIERS.forEach((t, i) => {
+    const open = tierUnlocked(i);
+    const done = clearedIn(i);
+    const stars = t.levels.reduce((a, _, l) => a + (saved.stars[levelId(i, l)] || 0), 0);
+    const card = el('button', `tier t${i + 1}${open ? '' : ' locked'}`);
+    card.type = 'button';
+    card.setAttribute('aria-disabled', String(!open));
+    card.innerHTML = `
+      <div class="lbl"><span>${t.name}</span><span>${t.en}</span></div>
+      <h3>${t.title}</h3>
+      <p>${t.desc}</p>
+      <div class="chips">${t.concepts.map(c => `<span class="chip">${c}</span>`).join('')}</div>
+      <div class="bar" aria-hidden="true"><i style="width:${(stars / (t.levels.length * 3)) * 100}%"></i></div>
+      <div class="meta"><span>성공 ${done} / ${t.levels.length}단계 · 별 ${stars}</span>${done === t.levels.length ? '<span class="badge">배지 획득</span>' : ''}</div>
+      ${open ? '' : `<span class="lockmsg">잠김 · ${TIERS[i - 1].name}에서 6단계 이상 성공하면 열려요</span>`}`;
+    card.onclick = () => {
+      if (!open) return;
+      const first = t.levels.findIndex((_, l) => !saved.stars[levelId(i, l)]);
+      openLevel(i, first < 0 ? 0 : first);
+    };
+    box.appendChild(card);
+  });
+  $('unlockAll').checked = !!saved.unlockAll;
+  renderProgress();
+}
+function showHome() {
+  if (running) { stopReq = true; return setTimeout(showHome, speed + 60); }
+  $('overlay').hidden = true;
+  $('play').hidden = true;
+  $('home').hidden = false;
+  renderHome();
+  window.scrollTo(0, 0);
+}
+function renderLevels() {
+  const nav = $('levels');
+  nav.innerHTML = '';
+  TIERS[tierIdx].levels.forEach((lv, i) => {
+    const s = saved.stars[levelId(tierIdx, i)] || 0;
+    const b = el('button', 'lv' + (i === lvIdx ? ' cur' : '') + (s ? ' done' : ''));
+    b.type = 'button';
+    b.innerHTML = `<span>${i + 1}</span><span class="st">${'★'.repeat(s)}</span>`;
+    b.setAttribute('aria-label', `${i + 1}단계 ${lv.name}${s ? `, 별 ${s}개` : ''}`);
+    if (i === lvIdx) b.setAttribute('aria-current', 'step');
+    b.onclick = () => openLevel(tierIdx, i);
+    nav.appendChild(b);
+  });
+}
+function renderPalette() {
+  const p = $('palette');
+  p.innerHTML = '';
+  const c0 = defaultCond('until'), c1 = defaultCond('if');
+  const labels = {
+    repeat: '3번 반복하기', until: `${COND[c0].until} 반복하기`, if: `만약 ${COND[c1].if}`,
+    ifelse: `만약 ${COND[c1].if} · 아니면`, call: L.fn,
+  };
+  for (const t of L.blocks) {
+    const m = BLOCKS[t];
+    const b = el('button', `pal cat-${m.cat}`);
+    b.type = 'button';
+    b.innerHTML = `<span class="ic">${m.icon}</span><span>${labels[t] || m.label}</span>`;
+    b.onclick = () => addBlock(t);
+    p.appendChild(b);
+  }
+}
+function openLevel(t, l) {
+  if (running) { stopReq = true; return setTimeout(() => openLevel(t, l), speed + 60); }
+  tierIdx = t; lvIdx = l; L = TIERS[t].levels[l];
+  saved.last = { t, l }; persist();
+  $('home').hidden = true;
+  $('play').hidden = false;
+  $('overlay').hidden = true;
+  $('tiername').textContent = `${TIERS[t].name} · ${TIERS[t].title}`;
+  $('concept').textContent = L.concept;
+  $('lvnum').textContent = `${TIERS[t].name} ${l + 1}단계`;
+  $('lvname').textContent = L.name;
+  $('tip').innerHTML = L.tip;
+  $('hint').textContent = L.hint;
+  $('hint').hidden = true;
+  $('hintBtn').textContent = '힌트 보기';
+  maps = levelMaps(L);
+  passed = [];
+  loadMap(0);
+  const what = flag ? (gemList.length ? '보석을 모두 모으고 깃발까지 가세요.' : '깃발까지 가세요.')
+    : gemList.length > 1 || maps.length > 1 ? '보석을 모두 모으세요.' : '로봇을 보석까지 데려가세요.';
+  $('goal').textContent = (maps.length > 1 ? `지도 ${maps.length}개 모두에서 ` : '') + what
+    + (L.pick ? ' 보석은 "보석 줍기"로 주워야 해요.' : '')
+    + (L.limit ? ` 블록은 ${L.limit}개까지 쓸 수 있어요.` : '');
+  prog = { main: L.preset ? fromSpec(L.preset) : [], fn: [] };
+  sel = null;
+  $('fnPanel').hidden = !L.fn;
+  if (L.fn) $('fnTitle').textContent = `나만의 블록: ${L.fn}`;
+  resetWorld();
+  renderPalette();
+  renderLevels();
+  renderProgress();
+  renderProgram();
+  setStatus(L.preset ? '프로그램이 이미 들어 있어요. 먼저 실행해서 무엇이 잘못됐는지 찾아보세요.' : '');
+  window.scrollTo(0, 0);
+}
+
+$('runBtn').onclick = run;
+$('backBtn').onclick = showHome;
+$('resetBtn').onclick = () => { if (running) stopReq = true; else { resetWorld(); setStatus(''); } };
+$('clearBtn').onclick = () => {
+  if (running) return;
+  prog = { main: [], fn: [] };
+  sel = null; resetWorld(); renderProgram(); setStatus('');
+};
+$('hintBtn').onclick = () => {
+  const h = $('hint');
+  h.hidden = !h.hidden;
+  $('hintBtn').textContent = h.hidden ? '힌트 보기' : '힌트 숨기기';
+};
+document.querySelectorAll('.speed button').forEach(b => {
+  b.onclick = () => {
+    speed = +b.dataset.speed;
+    boardEl.style.setProperty('--t', `${Math.round(speed * 0.75)}ms`);
+    document.querySelectorAll('.speed button').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+  };
+});
+$('unlockAll').onchange = e => { saved.unlockAll = e.target.checked; persist(); renderHome(); };
+$('againBtn').onclick = () => { $('overlay').hidden = true; resetWorld(); setStatus('블록을 줄여서 별 3개에 도전해 보세요!'); };
+$('nextBtn').onclick = () => {
+  const n = nextTarget();
+  if (!n) return;
+  if (n.home) showHome(); else openLevel(n.t, n.l);
+};
+$('overlay').addEventListener('click', e => { if (e.target.id === 'overlay') $('overlay').hidden = true; });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('overlay').hidden = true; });
+
+renderHome();
+</script>
+</body>
+</html>
