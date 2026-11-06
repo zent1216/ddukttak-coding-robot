@@ -102,6 +102,22 @@ header.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-cont
 .teacher { display: flex; align-items: center; gap: 8px; color: var(--ink-soft); font-size: 0.9rem; }
 .teacher input { width: 18px; height: 18px; }
 
+/* home: users */
+.users { display: flex; flex-direction: column; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 12px 16px; }
+.userlist, .useracts, .userform, .confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.userlist .ttl { font-family: var(--font-display); margin-right: 4px; }
+.user, .mini { border: 2px solid var(--line); background: var(--surface); color: inherit; border-radius: 12px; padding: 5px 12px; cursor: pointer; font-size: 0.9rem; }
+.user { font-family: var(--font-display); font-size: 1rem; }
+.user[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.user small { font-family: var(--font-body, inherit); opacity: 0.75; margin-left: 4px; }
+.mini.add { border-style: dashed; }
+.userform input, .jump select { font: inherit; color: inherit; background: var(--surface-2); border: 2px solid var(--line); border-radius: 10px; padding: 5px 10px; min-width: 0; max-width: 100%; }
+.confirm span { font-size: 0.92rem; }
+.jump { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--ink-soft); font-size: 0.9rem; }
+.jump b { font-family: var(--font-display); font-weight: 400; color: var(--ink); }
+.jump p { margin: 0; flex-basis: 100%; font-size: 0.85rem; }
+.who { font-family: var(--font-display); }
+
 /* play */
 .playbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .back { border: 2px solid var(--line); background: var(--surface); border-radius: 12px; padding: 7px 14px; cursor: pointer; font-family: var(--font-display); }
@@ -241,7 +257,32 @@ header.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-cont
   </header>
 
   <section id="home" class="col">
+    <section class="users" aria-label="사용자">
+      <div class="userlist" id="userList"></div>
+      <form class="userform" id="userForm" hidden>
+        <input id="userName" maxlength="12" autocomplete="off" aria-label="사용자 이름">
+        <button class="mini" type="submit">저장</button>
+        <button class="mini" id="userCancel" type="button">취소</button>
+      </form>
+      <div class="useracts" id="userActs">
+        <button class="mini" id="renameBtn" type="button">이름 바꾸기</button>
+        <button class="mini" id="resetUserBtn" type="button">기록 초기화</button>
+        <button class="mini" id="delUserBtn" type="button">사용자 삭제</button>
+      </div>
+      <div class="confirm" id="confirmBar" hidden>
+        <span id="confirmMsg"></span>
+        <button class="mini" id="confirmYes" type="button">네</button>
+        <button class="mini" id="confirmNo" type="button">아니요</button>
+      </div>
+    </section>
     <div class="tiers" id="tiers"></div>
+    <form class="jump" id="jumpForm">
+      <b>단계로 바로 가기</b>
+      <select id="jumpTier" aria-label="등급"></select>
+      <select id="jumpLevel" aria-label="단계"></select>
+      <button class="mini" type="submit">이동</button>
+      <p>기록이 지워졌을 때 쓰세요. 고른 단계 앞의 단계는 성공(별 1개)으로 표시돼요. 이미 받은 별은 그대로예요.</p>
+    </form>
     <label class="teacher"><input type="checkbox" id="unlockAll"> 모든 등급 열기 (선생님용)</label>
   </section>
 
@@ -577,10 +618,20 @@ const TIERS = [
     ] },
 ];
 
-const STORE_KEY = 'ddukttak-coding-v2';
-let saved = { stars: {}, last: null, unlockAll: false };
-try { const s = JSON.parse(localStorage.getItem(STORE_KEY)); if (s && s.stars) saved = Object.assign(saved, s); } catch (e) {}
-function persist() { try { localStorage.setItem(STORE_KEY, JSON.stringify(saved)); } catch (e) {} }
+const STORE_KEY = 'ddukttak-coding-v3';
+const OLD_STORE_KEY = 'ddukttak-coding-v2';
+const newUser = n => ({ id: 'u' + n, name: '사용자 ' + n, stars: {}, last: null, unlockAll: false });
+let store = { users: [newUser(1), newUser(2), newUser(3)], cur: 'u1', next: 4 };
+try {
+  const s = JSON.parse(localStorage.getItem(STORE_KEY));
+  if (s && Array.isArray(s.users) && s.users.length) store = s;
+  else {
+    const old = JSON.parse(localStorage.getItem(OLD_STORE_KEY));
+    if (old && old.stars) Object.assign(store.users[0], { stars: old.stars, last: old.last || null, unlockAll: !!old.unlockAll });
+  }
+} catch (e) {}
+let saved = store.users.find(u => u.id === store.cur) || store.users[0];
+function persist() { try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) {} }
 
 const $ = id => document.getElementById(id);
 const boardEl = $('board'), progEl = $('program'), fnEl = $('fnProgram'), statusEl = $('status');
@@ -1147,8 +1198,75 @@ function renderProgress() {
   const total = TIERS.reduce((a, t) => a + t.levels.length * 3, 0);
   const got = Object.values(saved.stars).reduce((a, b) => a + b, 0);
   $('progress').innerHTML = `별 <b>${got}</b> / ${total}`;
+  $('progress').prepend(el('span', 'who', saved.name + ' · '));
+}
+function renderUsers() {
+  const box = $('userList');
+  box.innerHTML = '';
+  box.appendChild(el('span', 'ttl', '누가 할까요?'));
+  store.users.forEach(u => {
+    const b = el('button', 'user', u.name);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(u === saved));
+    b.appendChild(el('small', '', `★${Object.values(u.stars).reduce((a, s) => a + s, 0)}`));
+    b.onclick = () => { saved = u; store.cur = u.id; persist(); renderHome(); };
+    box.appendChild(b);
+  });
+  const add = el('button', 'mini add', '+ 사용자 추가');
+  add.type = 'button';
+  add.onclick = () => openUserForm('add');
+  box.appendChild(add);
+  $('delUserBtn').hidden = store.users.length < 2;
+  closeUserPanels();
+}
+let userFormMode = 'add';
+function closeUserPanels() {
+  $('userForm').hidden = true;
+  $('confirmBar').hidden = true;
+  $('userActs').hidden = false;
+}
+function openUserForm(mode) {
+  userFormMode = mode;
+  closeUserPanels();
+  $('userActs').hidden = true;
+  $('userForm').hidden = false;
+  $('userName').value = mode === 'rename' ? saved.name : '';
+  $('userName').placeholder = mode === 'add' ? '사용자 ' + store.next : '';
+  $('userName').focus();
+}
+function askUser(msg, yes, action) {
+  closeUserPanels();
+  $('userActs').hidden = true;
+  $('confirmBar').hidden = false;
+  $('confirmMsg').textContent = msg;
+  $('confirmYes').textContent = yes;
+  $('confirmYes').onclick = () => { action(); persist(); renderHome(); };
+}
+function renderJump() {
+  const t = $('jumpTier');
+  const cur = saved.last ? saved.last.t : 0;
+  t.innerHTML = '';
+  TIERS.forEach((tier, i) => { const o = el('option', '', tier.name); o.value = i; t.appendChild(o); });
+  t.value = cur;
+  renderJumpLevels(saved.last ? saved.last.l : 0);
+}
+function renderJumpLevels(sel) {
+  const l = $('jumpLevel');
+  l.innerHTML = '';
+  TIERS[+$('jumpTier').value].levels.forEach((lv, i) => { const o = el('option', '', `${i + 1}단계 ${lv.name}`); o.value = i; l.appendChild(o); });
+  l.value = sel;
+}
+function jumpTo(t, l) {
+  TIERS.forEach((tier, ti) => tier.levels.forEach((_, li) => {
+    const id = levelId(ti, li);
+    if ((ti < t || (ti === t && li < l)) && !saved.stars[id]) saved.stars[id] = 1;
+  }));
+  persist();
+  openLevel(t, l);
 }
 function renderHome() {
+  renderUsers();
+  renderJump();
   const box = $('tiers');
   box.innerHTML = '';
   TIERS.forEach((t, i) => {
@@ -1271,6 +1389,30 @@ document.querySelectorAll('.speed button').forEach(b => {
     document.querySelectorAll('.speed button').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
   };
 });
+$('userCancel').onclick = closeUserPanels;
+$('userForm').onsubmit = e => {
+  e.preventDefault();
+  const name = $('userName').value.trim();
+  if (userFormMode === 'add') {
+    const u = newUser(store.next++);
+    if (name) u.name = name;
+    store.users.push(u);
+    saved = u; store.cur = u.id;
+  } else if (name) saved.name = name;
+  persist();
+  renderHome();
+};
+$('renameBtn').onclick = () => openUserForm('rename');
+$('resetUserBtn').onclick = () => askUser(`${saved.name}의 별과 단계 기록을 모두 지울까요?`, '네, 지우기', () => {
+  saved.stars = {}; saved.last = null; saved.unlockAll = false;
+});
+$('delUserBtn').onclick = () => askUser(`${saved.name}을(를) 기록과 함께 삭제할까요?`, '네, 삭제', () => {
+  store.users = store.users.filter(u => u !== saved);
+  saved = store.users[0]; store.cur = saved.id;
+});
+$('confirmNo').onclick = closeUserPanels;
+$('jumpTier').onchange = () => renderJumpLevels(0);
+$('jumpForm').onsubmit = e => { e.preventDefault(); jumpTo(+$('jumpTier').value, +$('jumpLevel').value); };
 $('unlockAll').onchange = e => { saved.unlockAll = e.target.checked; persist(); renderHome(); };
 $('againBtn').onclick = () => { $('overlay').hidden = true; resetWorld(); setStatus('블록을 줄여서 별 3개에 도전해 보세요!'); };
 $('nextBtn').onclick = () => {
